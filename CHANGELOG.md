@@ -1,28 +1,12 @@
 # Changelog
 
-## [1.12.2a3](https://github.com/NeonGeckoCom/neon-utils/tree/1.12.2a3) (2025-07-02)
+## [1.13.1a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a1) (2025-08-27)
 
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.12.2a2...1.12.2a3)
-
-**Merged pull requests:**
-
-- Override `/status` server endpoint logging [\#552](https://github.com/NeonGeckoCom/neon-utils/pull/552) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.12.2a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.12.2a2) (2025-06-25)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.12.2a1...1.12.2a2)
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.0...1.13.1a1)
 
 **Merged pull requests:**
 
-- Add helper to start a health check server [\#551](https://github.com/NeonGeckoCom/neon-utils/pull/551) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.12.2a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.12.2a1) (2025-05-30)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.12.1...1.12.2a1)
-
-**Merged pull requests:**
-
-- Make HANA SSL optional [\#550](https://github.com/NeonGeckoCom/neon-utils/pull/550) ([NeonDaniel](https://github.com/NeonDaniel))
+- Update Skill API to support outside applications [\#554](https://github.com/NeonGeckoCom/neon-utils/pull/554) ([NeonDaniel](https://github.com/NeonDaniel))
 
 
 
