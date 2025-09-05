@@ -1355,7 +1355,7 @@ def _get_neon_skills_config(neon_config_path=None) -> dict:
             neon_skills["directory_override"] = neon_skills["directory"]
     except ModuleNotFoundError:
         LOG.warning("ovos-core not installed")
-        neon_skills["directory_override"] = neon_skills["directory"]
+        # neon_skills["directory_override"] = neon_skills["directory"]
 
     neon_skills["disable_osm"] = neon_skills.get("skill_manager", "osm") != "osm"
     neon_skills["priority_skills"] = neon_skills.get("priority") or []
