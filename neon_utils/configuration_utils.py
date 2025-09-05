@@ -37,7 +37,7 @@ from time import sleep
 import yaml
 
 from copy import deepcopy
-from os.path import *
+from os.path import join, isfile, isdir, exists, expanduser, dirname, basename, splitext
 from collections.abc import MutableMapping
 from contextlib import suppress
 
@@ -302,9 +302,9 @@ class NGIConfig:
                         from ruamel.yaml import YAML
                         config = _make_loaded_config_safe(YAML().load(f))
                     except ImportError:
-                        LOG.error(f"ruamel.yaml not available to load "
-                                  f"legacy config. "
-                                  f"pip install neon-utils[configuration]")
+                        LOG.error("ruamel.yaml not available to load "
+                                  "legacy config. "
+                                  "pip install neon-utils[configuration]")
             if not config:
                 LOG.debug(f"Empty config file found at: {self.file_path}")
                 config = dict()
@@ -325,7 +325,7 @@ class NGIConfig:
         """
         to_write = deepcopy(self._content)
         if not to_write:
-            LOG.error(f"Config content empty! Skipping write to disk and reloading")
+            LOG.error("Config content empty! Skipping write to disk and reloading")
             return False
         if not path_is_read_writable(self.file_path):
             LOG.warning(f"Insufficient write permissions: {self.file_path}")
@@ -347,7 +347,7 @@ class NGIConfig:
                 self._disk_content_hash = hash(repr(self._content))
             except Exception as e:
                 LOG.error(e)
-                LOG.info(f"Restoring config from tmp file backup")
+                LOG.info("Restoring config from tmp file backup")
                 shutil.copy2(tmp_filename, self.file_path)
             return True
 
@@ -810,7 +810,7 @@ def get_user_config_from_mycroft_conf(user_config: dict = None) -> dict:
                                        ["offset"] / 3600000, 1))
 
     else:
-        LOG.warning(f"No location in core configuration")
+        LOG.warning("No location in core configuration")
     return user_config
 
 
@@ -941,6 +941,8 @@ def get_mycroft_compatible_location(location: dict) -> dict:
     return location
 
 
+@deprecated("Configuration should be managed via ovos_config.Configuration",
+            "2.0.0")
 def get_mycroft_compatible_config(mycroft_only=False,
                                   neon_config_path=None) -> dict:
     """
@@ -1022,6 +1024,8 @@ def get_mycroft_compatible_config(mycroft_only=False,
     return default_config
 
 
+@deprecated("Configuration should be managed via ovos_config.Configuration",
+            "2.0.0")
 def write_mycroft_compatible_config(file_to_write: str = None) -> str:
     """
     Generates a mycroft-like configuration and writes it to the specified file
@@ -1036,7 +1040,7 @@ def write_mycroft_compatible_config(file_to_write: str = None) -> str:
     if isfile(file_path):
         disk_config = load_commented_json(file_path)
         if disk_config == configuration:
-            LOG.debug(f"Configuration already up to date")
+            LOG.debug("Configuration already up to date")
             return file_path
         LOG.warning(f"File exists and will be overwritten: {file_to_write}")
     elif not isdir(dirname(file_path)):
@@ -1149,7 +1153,7 @@ def parse_skill_default_settings(settings_meta: dict) -> dict:
         LOG.error(settings_meta)
         raise TypeError(f"Expected a dict, got: {type(settings_meta)}")
     if not settings_meta:
-        LOG.debug(f"Empty Settings")
+        LOG.debug("Empty Settings")
         return dict()
     else:
         settings = dict()
@@ -1381,43 +1385,11 @@ def _get_neon_skills_config(neon_config_path=None) -> dict:
             neon_skills["neon_token"] = find_neon_git_token()
             # populate_github_token_config(neon_skills["neon_token"])
         except FileNotFoundError:
-            LOG.debug(f"No Github token found; skills may fail to install")
+            LOG.debug("No Github token found; skills may fail to install")
             neon_skills["neon_token"] = None
     skills_config = {**mycroft_config.get("skills", {}), **neon_skills}
     skills_config.setdefault("debug", False)
     return skills_config
-
-
-@deprecated("Configuration moved to `ovos_config.Configuration`", "2.0.0")
-def _get_neon_transcribe_config(neon_config_path=None) -> dict:
-    """
-    Get a configuration dict for the transcription module.
-    Returns:
-        dict of config params used for the Neon transcription module
-    """
-    local_config = _get_neon_local_config(neon_config_path)
-    user_config = get_neon_user_config(neon_config_path) if \
-        isfile(join(neon_config_path or get_config_dir(),
-                    "ngi_user_info.yml")) else {}
-    neon_transcribe_config = dict()
-    neon_transcribe_config["transcript_dir"] = \
-        local_config.get("dirVars", {}).get("docsDir", "")
-    neon_transcribe_config["audio_permission"] = \
-        user_config.get("privacy", {}).get("save_audio", False)
-    return neon_transcribe_config
-
-
-@deprecated("Configuration moved to `ovos_config.Configuration`", "2.0.0")
-def _get_neon_gui_config(neon_config_path=None) -> dict:
-    """
-    Get a configuration dict for the gui module.
-    Returns:
-        dict of config params used for the Neon gui module
-    """
-    local_config = _get_neon_local_config(neon_config_path)
-    gui_config = dict(local_config.get("gui", {}))
-    gui_config["base_port"] = gui_config.get("port")
-    return gui_config
 
 
 @deprecated("Configuration moved to `ovos_config.Configuration`", "2.0.0")
@@ -1430,31 +1402,6 @@ def _safe_mycroft_config() -> dict:
     from ovos_config.config import Configuration
     config = Configuration()
     return dict(config)
-
-
-@deprecated("Configuration moved to `ovos_config.Configuration`", "2.0.0")
-def _get_neon_yaml_config() -> dict:
-    from ovos_config.meta import get_ovos_config
-    from ovos_config.locations import get_xdg_config_save_path
-    from ovos_utils.json_helper import merge_dict
-
-    with open(get_ovos_config()["default_config_path"]) as f:
-        default = yaml.safe_load(f)
-    config = dict(default)
-    system_config = os.environ.get("MYCROFT_SYSTEM_CONFIG",
-                                   "/etc/neon/neon.yaml")
-    user_config = join(get_xdg_config_save_path("neon"), "neon.yaml")
-    if isfile(system_config):
-        with open(system_config) as f:
-            system = yaml.safe_load(f)
-        config = merge_dict(config, system)
-
-    if isfile(user_config):
-        with open(user_config) as f:
-            user = yaml.safe_load(f)
-        config = merge_dict(config, user)
-
-    return config
 
 
 @deprecated("Configuration moved to `ovos_config.Configuration`", "2.0.0")
