@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a2) (2025-09-10)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a1...1.13.1a2)
+
+**Merged pull requests:**
+
+- Improve Skill  metadata parsing support and remove OSM dependency [\#558](https://github.com/NeonGeckoCom/neon-utils/pull/558) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a1) (2025-08-27)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.0...1.13.1a1)
