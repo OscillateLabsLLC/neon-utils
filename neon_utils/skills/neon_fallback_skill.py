@@ -40,7 +40,6 @@ from typing import List, Any, Optional
 from dateutil.tz import gettz
 from json_database import JsonStorage
 from ovos_bus_client import Message
-from ovos_plugin_manager.language import OVOSLangDetectionFactory, OVOSLangTranslationFactory
 from ovos_utils.gui import is_gui_connected
 from ovos_utils.log import LOG, log_deprecation, deprecated
 from ovos_utils.skills import get_non_properties
@@ -55,6 +54,12 @@ from neon_utils.message_utils import dig_for_message, resolve_message, get_messa
 from neon_utils.skills.neon_skill import CACHE_TIME_OFFSET, DEFAULT_SPEED_MODE, SPEED_MODE_EXTENSION_TIME, NeonSkill, \
     save_settings
 from neon_utils.user_utils import get_user_prefs
+
+try:
+    from ovos_plugin_manager.language import OVOSLangDetectionFactory, OVOSLangTranslationFactory
+except ImportError:
+    OVOSLangDetectionFactory = None
+    OVOSLangTranslationFactory = None
 
 
 class NeonFallbackSkill(FallbackSkillV1):

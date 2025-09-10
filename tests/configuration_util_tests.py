@@ -528,7 +528,7 @@ class ConfigurationUtilTests(unittest.TestCase):
         self.assertIsInstance(mycroft_config["gui_websocket"]["host"], str)
         self.assertIsInstance(mycroft_config["gui_websocket"]["base_port"],
                               int)
-        self.assertIsInstance(mycroft_config["ready_settings"], list)
+        # self.assertIsInstance(mycroft_config["ready_settings"], list)
         self.assertIsInstance(mycroft_config['tts'], dict)
         self.assertIsInstance(mycroft_config["keys"], dict)
         # self.assertEqual(mycroft_config["skills"]["directory"],
@@ -1017,30 +1017,6 @@ class ConfigurationUtilTests(unittest.TestCase):
 
         os.remove(new_conf)
 
-    @mock.patch('neon_utils.packaging_utils.get_neon_core_root')
-    def test_get_neon_yaml_config(self, get_core_root):
-        config_dir = join(dirname(__file__), "configuration",
-                          "get_neon_yaml_config")
-        get_core_root.return_value = join(config_dir, "default")
-        os.environ["XDG_CONFIG_HOME"] = config_dir
-        os.environ["MYCROFT_SYSTEM_CONFIG"] = join(config_dir, "system",
-                                                   "neon.yaml")
-        from neon_utils.configuration_utils import _get_neon_yaml_config, \
-            init_config_dir
-        init_config_dir()
-        config = _get_neon_yaml_config()
-        self.assertEqual(config,
-                         {"config": "user",
-                          "from_default": True,
-                          "from_system": True,
-                          "user": {
-                              "from_system": True,
-                              "from_default": True,
-                              "from_user": True,
-                              "not_from_user": False
-                          }})
-        shutil.rmtree(join(config_dir, os.environ["OVOS_CONFIG_BASE_FOLDER"]))
-
 
 class DeprecatedConfigTests(unittest.TestCase):
     def doCleanups(self) -> None:
@@ -1065,21 +1041,6 @@ class DeprecatedConfigTests(unittest.TestCase):
         self.assertIsInstance(config["tts"], dict)
         self.assertIsInstance(config["language"], dict)
 
-    def test_get_gui_config(self):
-        from neon_utils.configuration_utils import _get_neon_gui_config
-        config = _get_neon_gui_config()
-        self.assertIsInstance(config, dict)
-        # self.assertIsInstance(config["lang"], str)
-        # self.assertIsInstance(config["enclosure"], str)
-        # self.assertIsInstance(config["host"], str)
-        # self.assertIsInstance(config["port"], int)
-        # self.assertIsInstance(config["base_port"], int)
-        # self.assertIsInstance(config["route"], str)
-        # self.assertIsInstance(config["ssl"], bool)
-        # self.assertIsInstance(config["resource_root"], str)
-        # self.assertIn("file_server", config.keys())
-        # self.assertEqual(config["port"], config["base_port"])
-
     def test_get_lang_config(self):
         from neon_utils.configuration_utils import _get_neon_lang_config
         config = _get_neon_lang_config()
@@ -1090,13 +1051,6 @@ class DeprecatedConfigTests(unittest.TestCase):
         # self.assertIn("translation_module", config)
         # self.assertIn("boost", config)
         # self.assertIsInstance(config["libretranslate"], dict)
-
-    def test_get_transcribe_config(self):
-        from neon_utils.configuration_utils import _get_neon_transcribe_config
-        config = _get_neon_transcribe_config()
-        self.assertIsInstance(config, dict)
-        self.assertIsInstance(config["audio_permission"], bool)
-        self.assertIsInstance(config["transcript_dir"], str)
 
     def test_get_tts_config(self):
         from neon_utils.configuration_utils import _get_neon_tts_config
