@@ -35,7 +35,7 @@ from tempfile import mkstemp
 import pkg_resources
 import sysconfig
 
-from os.path import exists, join, expanduser, isdir
+from os.path import exists, join, isfile
 from ovos_utils.log import LOG, deprecated
 
 
@@ -180,18 +180,19 @@ def get_mycroft_core_root():
     raise FileNotFoundError("Could not determine core directory")
 
 
+@deprecated("Use neon_utils.skill_utils.get_skill_metadata", "2.0.0")
 def build_skill_spec(skill_dir: str) -> dict:
     """
     Build dict contents of a skill.json file.
     :param skill_dir: path to skill directory to parse
     :returns: dict skill.json spec
     """
-    import shutil
-    from ovos_skills_manager.local_skill import get_skill_data_from_directory
-    from neon_utils.file_utils import parse_skill_readme_file
-    from neon_utils.configuration_utils import dict_merge
+    from neon_utils.skill_utils import get_skill_metadata
 
-    def get_skill_license():  # TODO: Implement OSM version of this
+    # Non-packaged skills are deprecated. Support is patched in here for
+    # Backwards-compatibility only
+
+    def get_skill_license():
         try:
             with open(join(skill_dir, "LICENSE.md")) as f:
                 contents = f.read()
@@ -209,63 +210,23 @@ def build_skill_spec(skill_dir: str) -> dict:
         if "Neon AI Non-commercial Friendly License" in contents:
             return "Neon 1.0"
 
-    _invalid_skill_data_keys = ("appstore", "appstore_url", "credits",
-                                "skill_id")
-    _invalid_readme_keys = ("contact support", "details")
-    default_skill = {"title": "",
-                     "url": "",
-                     "summary": "",
-                     "short_description": "",
-                     "description": "",
-                     "examples": [],
-                     "desktopFile": False,
-                     "warning": "",
-                     "systemDeps": False,
-                     "requirements": {
-                         "python": [],
-                         "system": {},
-                         "skill": []
-                     },
-                     "incompatible_skills": [],
-                     "platforms": ["i386",
-                                   "x86_64",
-                                   "ia64",
-                                   "arm64",
-                                   "arm"],
-                     "branch": "master",
-                     "license": "",
-                     "icon": "",
-                     "category": "",
-                     "categories": [],
-                     "tags": [],
-                     "credits": [],
-                     "skillname": "",
-                     "authorname": "",
-                     "foldername": None}
+    skill_meta = get_skill_metadata(skill_dir)
+    if skill_meta.get("license") is None:
+        skill_meta["license"] = get_skill_license()
 
-    skill_dir = expanduser(skill_dir)
-    if not isdir(skill_dir):
-        raise FileNotFoundError(f"Not a Directory: {skill_dir}")
-    LOG.debug(f"skill_dir={skill_dir}")
-    skill_json = join(skill_dir, "skill.json")
-    backup = join(skill_dir, "skill_json.bak")
-    shutil.move(skill_json, backup)
-    skill_data = get_skill_data_from_directory(skill_dir)
-    shutil.move(backup, skill_json)
-    skill_data['foldername'] = None
-    for key in _invalid_skill_data_keys:
-        if key in skill_data:
-            skill_data.pop(key)
-    readme_data = parse_skill_readme_file(join(skill_dir, "README.md"))
-    for key in _invalid_readme_keys:
-        if key in readme_data:
-            readme_data.pop(key)
-    readme_data["short_description"] = readme_data.get("summary")
-    readme_data["license"] = get_skill_license()
-    readme_data["branch"] = "master"
-    skill_data = dict_merge(default_skill, skill_data)
-    skill_data["requirements"]["python"].sort()
-    return dict(dict_merge(skill_data, readme_data))
+    if skill_meta["requirements"].get("python") is None and \
+            isfile(join(skill_dir, "requirements.txt")):
+        try:
+            with open(join(skill_dir, "requirements.txt")) as f:
+                requirements = f.read().split('\n')
+            requirements = [r for r in requirements
+                            if r and not r.startswith('#')]
+            skill_meta["requirements"]["python"] = requirements
+        except Exception as e:
+            LOG.error(e)
+            skill_meta["requirements"]["python"] = []
+
+    return skill_meta
 
 def install_packages_from_pip(core_module: str, packages: List[str]) -> int:
     """
