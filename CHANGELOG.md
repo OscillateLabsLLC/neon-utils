@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.1a3](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a3) (2025-09-10)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a2...1.13.1a3)
+
+**Implemented enhancements:**
+
+- \[FEAT\] Deprecate ovos-core dependency [\#469](https://github.com/NeonGeckoCom/neon-utils/issues/469)
+
+**Merged pull requests:**
+
+- Remove ovos-core test dependency [\#557](https://github.com/NeonGeckoCom/neon-utils/pull/557) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a2) (2025-09-10)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a1...1.13.1a2)
