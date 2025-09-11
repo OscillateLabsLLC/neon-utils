@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1a4](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a4) (2025-09-11)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a3...1.13.1a4)
+
+**Merged pull requests:**
+
+- Update pip package installation method [\#556](https://github.com/NeonGeckoCom/neon-utils/pull/556) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a3](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a3) (2025-09-10)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a2...1.13.1a3)
