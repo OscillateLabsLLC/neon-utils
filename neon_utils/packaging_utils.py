@@ -28,6 +28,7 @@
 
 import sys
 import re
+import subprocess
 import importlib.util
 from typing import Tuple, Optional, List
 from tempfile import mkstemp
@@ -228,18 +229,25 @@ def build_skill_spec(skill_dir: str) -> dict:
 
     return skill_meta
 
-def install_packages_from_pip(core_module: str, packages: List[str]) -> int:
+def install_packages_from_pip(core_module: str, packages: List[str],
+                              force_reinstall: bool = False) -> int:
     """
     Install a Python package using pip
     :param core_module: string neon core module to install dependency for
     :param packages: List(string) list of packages to install
+    :param force_reinstall: force re-installation of packages
     :returns: int pip exit code
     """
-    import pip
+    def _pip_install(command_args: List[str]) -> int:
+        try:
+            result = subprocess.check_call([sys.executable, '-m', 'pip'] + command_args)
+            return result
+        except subprocess.CalledProcessError as e:
+            LOG.error(f"Error installing {command_args}: {e}")
+            return e.returncode
+
     _, tmp_constraints_file = mkstemp()
     _, tmp_requirements_file = mkstemp()
-
-    install_str = " ".join(packages)
 
     with open(tmp_constraints_file, 'w', encoding="utf8") as f:
         constraints = '\n'.join(get_package_dependencies(core_module))
@@ -250,10 +258,14 @@ def install_packages_from_pip(core_module: str, packages: List[str]) -> int:
         for pkg in packages:
             f.write(f"{pkg}\n")
 
-    LOG.info(f"Requested installation of plugins: {install_str}")
+    LOG.info(f"Requested installation of plugins: {packages}")
     pip_args = ['install', '-r', tmp_requirements_file, '-c', tmp_constraints_file]
-    result = pip.main(pip_args) if hasattr(pip, 'main') else pip._internal.main(pip_args)
-    
-    if result != 0:
-        return result
-    return 0
+    if stat := _pip_install(pip_args) != 0:
+        return stat
+
+    if force_reinstall:
+        LOG.info(f"Requested forced re-installation of plugins: {packages}")
+        pip_args.extend(['--no-deps', '--force-reinstall'])
+        stat = _pip_install(pip_args)
+
+    return stat
