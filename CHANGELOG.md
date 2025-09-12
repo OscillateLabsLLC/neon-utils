@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.13.1a7](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a7) (2025-09-12)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a6...1.13.1a7)
+
+**Implemented enhancements:**
+
+- \[FEAT\] Allow self-signed certificates in hana-utils [\#536](https://github.com/NeonGeckoCom/neon-utils/issues/536)
+- \[FEAT\] Docker handling of status hooks [\#498](https://github.com/NeonGeckoCom/neon-utils/issues/498)
+
+**Merged pull requests:**
+
+- Refactor to remove use of deprecated `pkg_resources` module [\#555](https://github.com/NeonGeckoCom/neon-utils/pull/555) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a6](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a6) (2025-09-12)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a5...1.13.1a6)
