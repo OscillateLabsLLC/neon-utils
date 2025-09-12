@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1a6](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a6) (2025-09-12)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a5...1.13.1a6)
+
+**Merged pull requests:**
+
+- Add support for authenticated HANA [\#537](https://github.com/NeonGeckoCom/neon-utils/pull/537) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a5](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a5) (2025-09-12)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a4...1.13.1a5)
