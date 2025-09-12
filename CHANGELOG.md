@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1a8](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a8) (2025-09-12)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a7...1.13.1a8)
+
+**Merged pull requests:**
+
+- Add function to get installed prerelease packages [\#517](https://github.com/NeonGeckoCom/neon-utils/pull/517) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a7](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a7) (2025-09-12)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a6...1.13.1a7)
