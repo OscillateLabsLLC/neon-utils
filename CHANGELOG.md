@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1a5](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a5) (2025-09-12)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a4...1.13.1a5)
+
+**Merged pull requests:**
+
+- Refactor log aggregators init [\#560](https://github.com/NeonGeckoCom/neon-utils/pull/560) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.13.1a4](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a4) (2025-09-11)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a3...1.13.1a4)
