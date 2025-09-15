@@ -28,6 +28,8 @@
 
 import importlib
 
+from ovos_utils.log import LOG
+
 _service_name_to_handler = {
     'sentry': 'init_sentry'
 }
@@ -37,10 +39,13 @@ def init_log_aggregators(config: dict = None):
     from ovos_config.config import Configuration
     config = config or Configuration()
     for service_name, handler in _service_name_to_handler.items():
-        service_config = _get_log_aggregator_config(config=config, name=service_name)
-        if bool(service_config.pop('enabled', False)):
-            service_module = importlib.import_module(f'.{service_name}', __name__)
-            getattr(service_module, handler)(config=service_config)
+        try:
+            service_config = _get_log_aggregator_config(config=config, name=service_name)
+            if service_config.pop('enabled', False) is True:
+                service_module = importlib.import_module(f'.{service_name}', __name__)
+                getattr(service_module, handler)(config=service_config)
+        except ModuleNotFoundError as e:
+            LOG.exception(f"Failed to load log aggregator {service_name}: {e}")
 
 
 def _get_log_aggregator_config(config: dict, name: str):

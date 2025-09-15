@@ -114,13 +114,18 @@ class PackagingUtilTests(unittest.TestCase):
 
     def test_get_package_dependencies(self):
         self_deps = get_package_dependencies("neon-utils")
-        requirements_file = join(os.path.dirname(os.path.dirname(__file__)),
-                                 "requirements", "requirements.txt")
-        with open(requirements_file) as f:
-            spec_requirements = f.read().split('\n')
+        requirements_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "requirements")
+        spec_requirements = []
+        for _, _, files in os.walk(requirements_dir):
+            for file in files:
+                with open(os.path.join(requirements_dir, file)) as f:
+                    spec_requirements += f.read().split('\n')
+
         spec_requirements = [r for r in spec_requirements
                              if r and not r.startswith('#')]
+
         # Version specs aren't order-dependent, so they can't be compared
+        # Also, constraints are normalized so elements cannot be compared
         self.assertEqual(len(self_deps), len(spec_requirements))
         with self.assertRaises(ModuleNotFoundError):
             get_package_dependencies("fakeneongeckopackage")
@@ -143,31 +148,47 @@ class PackagingUtilTests(unittest.TestCase):
         skill_spec["url"] = "https://github.com/NeonGeckoCom/skill-alerts"
         with open(join(test_dir, "skill.json")) as f:
             valid_spec = json.load(f)
-        self.assertEqual(valid_spec, skill_spec)
+        self.assertEqual(valid_spec, skill_spec, f"actual={skill_spec}")
 
     # TODO: Actually validate exception cases? DM
         
     def test_install_packages_from_pip(self):
-        import pip
+        import subprocess
         from neon_utils.packaging_utils import install_packages_from_pip
 
-        with patch.object(pip, 'main', return_value=0) as mock_method:
+        with patch.object(subprocess, 'check_call', return_value=0) as mock_method:
             test_result = install_packages_from_pip("neon-utils", ["pip-install-test"])
         
             args, kwargs = mock_method.call_args
             self.assertEqual(0, test_result)
-            mock_method.assert_called_once_with(['install', '-r', args[0][2], '-c', args[0][4]])
+            mock_method.assert_called_once_with([sys.executable, '-m', 'pip', 'install', '-r', args[0][5], '-c', args[0][7]])
 
-            with open(args[0][2], "r", encoding="utf8") as f:
+            with open(args[0][5], "r", encoding="utf8") as f:
                 line = f.readline()
                 self.assertEqual("pip-install-test\n", line)
 
             mock_method.reset_mock()
-            test_result = install_packages_from_pip("neon-utils", ["pip-install-test", "pip-install-another"])
+            test_result = install_packages_from_pip("neon-utils", ["pip-install-test", "pip-install-another"], force_reinstall=True)
 
             self.assertEqual(0, test_result)
-            mock_method.assert_called_once()
+            self.assertEqual(mock_method.call_count, 2)
 
+    @patch("subprocess.run")
+    def test_get_installed_prereleases(self, run):
+        run.return_value.stdout = """Package        Version
+----------------------- ------------
+stable_package          1.0.0
+beta_package            0.2.2b3
+alpha_package           0.0.0a0
+date_package            24.4.30
+post_package            2.0.0post10
+""".encode("utf-8")
+        from neon_utils.packaging_utils import get_installed_prereleases
+        prereleases = get_installed_prereleases()
+        self.assertEqual(len(prereleases), 2)
+        for pkg in prereleases:
+            self.assertTrue(pkg[0].endswith("_package"))
+            self.assertEqual(len(pkg[1].split('.')), 3)
 
 
 if __name__ == '__main__':
