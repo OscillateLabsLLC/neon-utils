@@ -1,77 +1,12 @@
 # Changelog
 
-## [1.13.1a8](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a8) (2025-09-12)
+## [1.14.1a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.1a1) (2026-03-13)
 
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a7...1.13.1a8)
-
-**Merged pull requests:**
-
-- Add function to get installed prerelease packages [\#517](https://github.com/NeonGeckoCom/neon-utils/pull/517) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a7](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a7) (2025-09-12)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a6...1.13.1a7)
-
-**Implemented enhancements:**
-
-- \[FEAT\] Allow self-signed certificates in hana-utils [\#536](https://github.com/NeonGeckoCom/neon-utils/issues/536)
-- \[FEAT\] Docker handling of status hooks [\#498](https://github.com/NeonGeckoCom/neon-utils/issues/498)
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.0...1.14.1a1)
 
 **Merged pull requests:**
 
-- Refactor to remove use of deprecated `pkg_resources` module [\#555](https://github.com/NeonGeckoCom/neon-utils/pull/555) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a6](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a6) (2025-09-12)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a5...1.13.1a6)
-
-**Merged pull requests:**
-
-- Add support for authenticated HANA [\#537](https://github.com/NeonGeckoCom/neon-utils/pull/537) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a5](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a5) (2025-09-12)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a4...1.13.1a5)
-
-**Merged pull requests:**
-
-- Refactor log aggregators init [\#560](https://github.com/NeonGeckoCom/neon-utils/pull/560) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a4](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a4) (2025-09-11)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a3...1.13.1a4)
-
-**Merged pull requests:**
-
-- Update pip package installation method [\#556](https://github.com/NeonGeckoCom/neon-utils/pull/556) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a3](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a3) (2025-09-10)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a2...1.13.1a3)
-
-**Implemented enhancements:**
-
-- \[FEAT\] Deprecate ovos-core dependency [\#469](https://github.com/NeonGeckoCom/neon-utils/issues/469)
-
-**Merged pull requests:**
-
-- Remove ovos-core test dependency [\#557](https://github.com/NeonGeckoCom/neon-utils/pull/557) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a2) (2025-09-10)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.1a1...1.13.1a2)
-
-**Merged pull requests:**
-
-- Improve Skill  metadata parsing support and remove OSM dependency [\#558](https://github.com/NeonGeckoCom/neon-utils/pull/558) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.13.1a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.13.1a1) (2025-08-27)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.13.0...1.13.1a1)
-
-**Merged pull requests:**
-
-- Update Skill API to support outside applications [\#554](https://github.com/NeonGeckoCom/neon-utils/pull/554) ([NeonDaniel](https://github.com/NeonDaniel))
+- Fix compatibility with latest ovos-utils release [\#562](https://github.com/NeonGeckoCom/neon-utils/pull/562) ([NeonDaniel](https://github.com/NeonDaniel))
 
 
 
