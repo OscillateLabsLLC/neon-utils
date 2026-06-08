@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.1a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.1a2) (2026-06-08)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.1a1...1.14.1a2)
+
+**Merged pull requests:**
+
+- Update `ovos-utils` compat. changes [\#563](https://github.com/NeonGeckoCom/neon-utils/pull/563) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.14.1a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.1a1) (2026-03-13)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.0...1.14.1a1)
