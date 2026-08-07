@@ -1,20 +1,12 @@
 # Changelog
 
-## [1.14.1a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.1a2) (2026-06-08)
+## [1.14.2a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.2a1) (2026-08-07)
 
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.1a1...1.14.1a2)
-
-**Merged pull requests:**
-
-- Update `ovos-utils` compat. changes [\#563](https://github.com/NeonGeckoCom/neon-utils/pull/563) ([NeonDaniel](https://github.com/NeonDaniel))
-
-## [1.14.1a1](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.1a1) (2026-03-13)
-
-[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.0...1.14.1a1)
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.1...1.14.2a1)
 
 **Merged pull requests:**
 
-- Fix compatibility with latest ovos-utils release [\#562](https://github.com/NeonGeckoCom/neon-utils/pull/562) ([NeonDaniel](https://github.com/NeonDaniel))
+- fix: register nltk download path before downloading cmudict [\#566](https://github.com/NeonGeckoCom/neon-utils/pull/566) ([mikejgray](https://github.com/mikejgray))
 
 
 
