@@ -41,6 +41,10 @@ except ImportError:
     raise ImportError("requests or bs4 not available,"
                       " pip install neon-utils[network]")
 
+# Some hosts reject requests that don't identify as a browser
+_USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
 
 def strip_tags(html):  # TODO: Document this! DM
     class MLStripper(HTMLParser, ABC):
@@ -78,43 +82,21 @@ def scrape_page_for_links(url: str) -> dict:
 
     def _get_links(url):
         LOG.debug(url)
+        url = url if url.startswith("http") else f"https://{url}"
+        LOG.info(f"Resolved {url}")
         try:
-            html = requests.get(url, timeout=2.0).text
+            html = requests.get(url, timeout=2.0,
+                                headers={"User-Agent": _USER_AGENT}).text
         except ConnectTimeout as e:
             raise e
         except Exception as e:
             LOG.warning(e)
             html = None
-        if not str(url).startswith("http") and not html:
-            request_url = f"https://{url}"
-            try:
-                html = requests.get(request_url, timeout=2.0).text
-            except ConnectTimeout as e:
-                raise e
-            except Exception as e:
-                LOG.warning(e)
-                html = None
-            if not html:
-                try:
-                    request_url = f"http://{url}"
-                    html = requests.get(request_url, timeout=2.0).text
-                except ConnectTimeout as e:
-                    raise e
-                except Exception as e:
-                    LOG.warning(e)
-                    html = None
-            url = request_url
 
-        LOG.debug(url)
         soup = BeautifulSoup(html, 'lxml')
-        # LOG.debug(html)
-        # LOG.debug(soup)
 
         # Look through the page and find all anchor tags
         for i in soup.find_all("a", href=True):
-            # LOG.debug(f"DM: found link: {i.text.rstrip()}")
-            # LOG.debug(f"DM: found href: {i['href']}")
-
             if '://' not in i['href']:
                 # Assume this is a relative address
                 href = url + i['href'].lower()
@@ -138,16 +120,14 @@ def scrape_page_for_links(url: str) -> dict:
 
         LOG.debug(available_links)
 
-    try:
-        _get_links(url)
-    except ConnectTimeout:
-        retry_count += 1
-        if retry_count < 8:
+    while retry_count < 8:
+        try:
             _get_links(url)
-        else:
-            raise ConnectTimeout
-    except Exception as x:
-        LOG.error(x)
-        LOG.debug(available_links)
-        raise ReferenceError
+            if available_links:
+                break
+        except ConnectTimeout as e:
+            if retry_count >= 7:  # last attempt
+                raise e
+        retry_count += 1
+
     return available_links
