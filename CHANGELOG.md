@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.2a3](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.2a3) (2026-08-18)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.2a2...1.14.2a3)
+
+**Merged pull requests:**
+
+- Retry HANA tests on rate-limit failures [\#569](https://github.com/NeonGeckoCom/neon-utils/pull/569) ([NeonDaniel](https://github.com/NeonDaniel))
+
 ## [1.14.2a2](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.2a2) (2026-08-13)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.2a1...1.14.2a2)
