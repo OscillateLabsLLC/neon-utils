@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.2a4](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.2a4) (2026-08-18)
+
+[Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.2a3...1.14.2a4)
+
+**Merged pull requests:**
+
+- fix: heal null location values when merging message user profiles [\#565](https://github.com/NeonGeckoCom/neon-utils/pull/565) ([mikejgray](https://github.com/mikejgray))
+
 ## [1.14.2a3](https://github.com/NeonGeckoCom/neon-utils/tree/1.14.2a3) (2026-08-18)
 
 [Full Changelog](https://github.com/NeonGeckoCom/neon-utils/compare/1.14.2a2...1.14.2a3)
