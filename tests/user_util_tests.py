@@ -228,6 +228,157 @@ class UserUtilTests(unittest.TestCase):
                          {'lat', 'lng', 'city', 'state', 'country', 'tz',
                           'utc'})
 
+    @patch("ovos_config.config.Configuration")
+    def test_get_user_prefs_heals_null_location(self, config):
+        from ovos_config.models import LocalConf
+        test_config_dir = os.path.join(os.path.dirname(__file__),
+                                       "user_util_test_config")
+        config.return_value = LocalConf(join(test_config_dir, "mycroft",
+                                             "mycroft.conf"))
+        import importlib
+        from neon_utils import user_utils
+        importlib.reload(user_utils)
+        from neon_utils.user_utils import get_user_prefs
+
+        null_location_profile = {
+            "user": {"username": "null_location_user"},
+            "location": {"lat": None, "lng": None, "city": None,
+                         "state": None, "country": None, "tz": None,
+                         "utc": None}}
+        prefs = get_user_prefs(Message("test_message", {}, {
+            "username": "null_location_user",
+            "user_profiles": [null_location_profile]}))
+        self.assertEqual(prefs["location"],
+                         {"lat": '38.971669',
+                          "lng": '-95.23525',
+                          "tz": 'America/Chicago',
+                          "utc": '-6.0',
+                          "city": 'Kirkland',
+                          "state": 'Washington',
+                          "country": "United States"})
+
+    @patch("ovos_config.config.Configuration")
+    def test_get_user_prefs_keeps_configured_location(self, config):
+        from ovos_config.models import LocalConf
+        test_config_dir = os.path.join(os.path.dirname(__file__),
+                                       "user_util_test_config")
+        config.return_value = LocalConf(join(test_config_dir, "mycroft",
+                                             "mycroft.conf"))
+        import importlib
+        from neon_utils import user_utils
+        importlib.reload(user_utils)
+        from neon_utils.user_utils import get_user_prefs
+
+        user_location_profile = {
+            "user": {"username": "located_user"},
+            "location": {"lat": '29.4241', "lng": '-98.4936',
+                         "city": 'San Antonio', "state": 'Texas',
+                         "country": "United States", "tz": 'America/Chicago',
+                         "utc": '-6.0'}}
+        prefs = get_user_prefs(Message("test_message", {}, {
+            "username": "located_user",
+            "user_profiles": [user_location_profile]}))
+        self.assertEqual(prefs["location"]["city"], 'San Antonio')
+        self.assertEqual(prefs["location"]["lat"], '29.4241')
+        self.assertEqual(prefs["location"]["state"], 'Texas')
+
+    @patch("ovos_config.config.Configuration")
+    def test_get_user_prefs_heals_null_outside_location(self, config):
+        from ovos_config.models import LocalConf
+        test_config_dir = os.path.join(os.path.dirname(__file__),
+                                       "user_util_test_config")
+        config.return_value = LocalConf(join(test_config_dir, "mycroft",
+                                             "mycroft.conf"))
+        import importlib
+        from neon_utils import user_utils
+        importlib.reload(user_utils)
+        from neon_utils.user_utils import get_user_prefs, \
+            get_default_user_config
+
+        # A null anywhere in the profile inherits its configured default
+        null_profile = {"user": {"username": "null_prefs_user",
+                                 "email": None},
+                        "units": {"measure": None, "date": "YMD"},
+                        "speech": {"tts_language": None}}
+        prefs = get_user_prefs(Message("test_message", {}, {
+            "username": "null_prefs_user",
+            "user_profiles": [null_profile]}))
+        default = get_default_user_config()
+        # These defaults are non-null, so the null cannot have survived
+        self.assertEqual(prefs["units"]["measure"],
+                         default["units"]["measure"])
+        self.assertEqual(prefs["speech"]["tts_language"],
+                         default["speech"]["tts_language"])
+        self.assertIsNotNone(prefs["units"]["measure"])
+        self.assertIsNotNone(prefs["speech"]["tts_language"])
+        # `user.email` defaults to an empty string, so assert the type changed
+        self.assertEqual(prefs["user"]["email"], default["user"]["email"])
+        self.assertIsNotNone(prefs["user"]["email"])
+        # A non-null value is still preferred over the default
+        self.assertEqual(prefs["units"]["date"], "YMD")
+
+    @patch("ovos_config.config.Configuration")
+    def test_get_user_prefs_keeps_falsy_values(self, config):
+        from ovos_config.models import LocalConf
+        test_config_dir = os.path.join(os.path.dirname(__file__),
+                                       "user_util_test_config")
+        config.return_value = LocalConf(join(test_config_dir, "mycroft",
+                                             "mycroft.conf"))
+        import importlib
+        from neon_utils import user_utils
+        importlib.reload(user_utils)
+        from neon_utils.user_utils import get_user_prefs
+
+        # Only null is absent; False, 0, and '' are deliberate user values and
+        # must not inherit a truthy default (i.e. a privacy opt-out reverting)
+        falsy_profile = {"user": {"username": "falsy_user", "email": ""},
+                         "privacy": {"save_audio": False, "save_text": False},
+                         "units": {"time": 0}}
+        prefs = get_user_prefs(Message("test_message", {}, {
+            "username": "falsy_user",
+            "user_profiles": [falsy_profile]}))
+        self.assertFalse(prefs["privacy"]["save_audio"])
+        self.assertFalse(prefs["privacy"]["save_text"])
+        self.assertEqual(prefs["user"]["email"], "")
+        self.assertEqual(prefs["units"]["time"], 0)
+
+    @patch("ovos_config.config.Configuration")
+    def test_get_user_prefs_heals_null_in_message_context(self, config):
+        from ovos_config.models import LocalConf
+        test_config_dir = os.path.join(os.path.dirname(__file__),
+                                       "user_util_test_config")
+        config.return_value = LocalConf(join(test_config_dir, "mycroft",
+                                             "mycroft.conf"))
+        import importlib
+        from neon_utils import user_utils
+        importlib.reload(user_utils)
+        from neon_utils.user_utils import get_user_prefs
+
+        # `get_user_prefs` back-fills the context profile in place, so the
+        # healed value must land there too rather than a null being restored
+        null_profile = {"user": {"username": "healed_user"},
+                        "units": {"measure": None}}
+        message = Message("test_message", {}, {
+            "username": "healed_user",
+            "user_profiles": [null_profile]})
+        prefs = get_user_prefs(message)
+        self.assertEqual(message.context["user_profiles"][0], prefs)
+        self.assertIsNotNone(
+            message.context["user_profiles"][0]["units"]["measure"])
+
+    def test_dict_update_keys_preserves_explicit_null(self):
+        from neon_utils.configuration_utils import dict_update_keys
+
+        # Skill settings merge through this helper and persist to disk, so a
+        # deliberately-nulled setting must not inherit the metadata default
+        settings = {"api_key": None, "endpoint": "https://custom"}
+        merged = dict_update_keys(settings, {"api_key": "DEFAULT_KEY",
+                                             "endpoint": "https://default",
+                                             "added_key": "added_value"})
+        self.assertIsNone(merged["api_key"])
+        self.assertEqual(merged["endpoint"], "https://custom")
+        self.assertEqual(merged["added_key"], "added_value")
+
 
 if __name__ == '__main__':
     unittest.main()
