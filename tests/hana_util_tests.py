@@ -29,6 +29,7 @@
 import json
 import unittest
 
+from copy import deepcopy
 from os import remove
 from os.path import join, dirname, isfile
 from shutil import copy
@@ -42,6 +43,9 @@ valid_headers = {}
 class HanaUtilTests(unittest.TestCase):
     test_server = "https://hana.neonaibeta.com"
     test_path = join(dirname(__file__), "hana_test.json")
+    # Tests run against a live server, concurrently across the CI matrix, so
+    # allow more retries on transient server errors than the library default.
+    request_retries = 3
 
     def tearDown(self) -> None:
         global valid_config
@@ -56,19 +60,40 @@ class HanaUtilTests(unittest.TestCase):
         neon_utils.hana_utils._client_config = {}
         neon_utils.hana_utils._headers = {}
 
+    @classmethod
+    def _use_valid_credentials(cls):
+        """
+        Install known-valid credentials so a test can make an authenticated
+        request without spending an `/auth/login` call. HANA rate-limits logins
+        per client IP, so tests that need a valid token as a precondition
+        (rather than as the behavior under test) must reuse an existing one.
+        Authenticates only if no credentials have been captured yet, so
+        individual tests can still be run in isolation.
+        """
+        import neon_utils.hana_utils
+        if valid_config and valid_headers:
+            neon_utils.hana_utils._client_config = deepcopy(valid_config)
+            neon_utils.hana_utils._headers = deepcopy(valid_headers)
+        else:
+            neon_utils.hana_utils._init_client(
+                cls.test_server, num_retries=cls.request_retries)
+
     @patch("neon_utils.hana_utils._get_client_config_path")
     def test_request_backend(self, config_path):
         config_path.return_value = self.test_path
 
-        # Use a valid config and skip extra auth
+        # Use a valid config and skip extra auth. The default backend URL has
+        # to match the requested server first, else `request_backend` treats
+        # this as a remote change and discards the credentials installed here.
         import neon_utils.hana_utils
-        neon_utils.hana_utils._client_config = valid_config
-        neon_utils.hana_utils._headers = valid_headers
+        neon_utils.hana_utils.set_default_backend_url(self.test_server)
+        self._use_valid_credentials()
         from neon_utils.hana_utils import request_backend
         resp = request_backend("/neon/get_response",
                                {"lang_code": "en-us",
                                 "utterance": "who are you",
-                                "user_profile": {}}, self.test_server)
+                                "user_profile": {}}, self.test_server,
+                               num_retries=self.request_retries)
         self.assertEqual(resp['lang_code'], "en-us")
         self.assertIsInstance(resp['answer'], str)
 
@@ -84,7 +109,8 @@ class HanaUtilTests(unittest.TestCase):
         resp = request_backend("/neon/get_response",
                                {"lang_code": "en-us",
                                 "utterance": "who are you",
-                                "user_profile": {}}, self.test_server)
+                                "user_profile": {}}, self.test_server,
+                               num_retries=self.request_retries)
         self.assertEqual(resp['lang_code'], "en-us")
         self.assertIsInstance(resp['answer'], str)
 
@@ -105,18 +131,21 @@ class HanaUtilTests(unittest.TestCase):
         import neon_utils.hana_utils
         from neon_utils.hana_utils import request_backend
         neon_utils.hana_utils.set_default_backend_url(self.test_server)
-        neon_utils.hana_utils._init_client(self.test_server)
+        neon_utils.hana_utils._init_client(
+            self.test_server, num_retries=self.request_retries)
         real_client_config = neon_utils.hana_utils._client_config
         neon_utils.hana_utils._client_config['expiration'] = time() + 29
         neon_utils.hana_utils._refresh_token = refresh_token
         resp = request_backend("/neon/get_response",
                                {"lang_code": "en-us",
                                 "utterance": "how are you",
-                                "user_profile": {}}, self.test_server)
+                                "user_profile": {}}, self.test_server,
+                               num_retries=self.request_retries)
         self.assertEqual(resp['lang_code'], "en-us")
         self.assertIsInstance(resp['answer'], str)
-        refresh_token.assert_called_once_with(self.test_server,
-                                              ssl_verify=True)
+        refresh_token.assert_called_once_with(
+            self.test_server, ssl_verify=True,
+            num_retries=self.request_retries)
 
         neon_utils.hana_utils._client_config = real_client_config
 
@@ -128,7 +157,7 @@ class HanaUtilTests(unittest.TestCase):
         from neon_utils.hana_utils import _get_token
 
         # Test valid default request
-        _get_token(self.test_server)
+        _get_token(self.test_server, num_retries=self.request_retries)
         from neon_utils.hana_utils import _client_config
         self.assertTrue(isfile(self.test_path))
         with open(self.test_path) as f:
@@ -140,7 +169,7 @@ class HanaUtilTests(unittest.TestCase):
                                         "password": "fake_password"}}
         from neon_utils.hana_utils import ServerException
         with self.assertRaises(ServerException):
-            _get_token(self.test_server)
+            _get_token(self.test_server, num_retries=self.request_retries)
 
     @patch("neon_utils.hana_utils._get_client_config_path")
     @patch("neon_utils.hana_utils._get_token")
@@ -159,7 +188,7 @@ class HanaUtilTests(unittest.TestCase):
         self.assertFalse(isfile(self.test_path))
 
         # Test valid request (auth + refresh)
-        _refresh_token(self.test_server)
+        _refresh_token(self.test_server, num_retries=self.request_retries)
         get_token.assert_called_once()
         from neon_utils.hana_utils import _client_config
         self.assertTrue(isfile(self.test_path))
@@ -169,7 +198,7 @@ class HanaUtilTests(unittest.TestCase):
 
         # Test refresh of existing token (no auth)
         sleep(1)  # sleep to ensure new credentials expire later than existing
-        _refresh_token(self.test_server)
+        _refresh_token(self.test_server, num_retries=self.request_retries)
         get_token.assert_called_once()
         with open(self.test_path) as f:
             new_credentials = json.load(f)
@@ -213,26 +242,35 @@ class HanaUtilTests(unittest.TestCase):
         self.assertEqual(neon_utils.hana_utils._DEFAULT_BACKEND_URL,
                          "https://hana.neonaiservices.com")
 
+    @patch("ovos_config.config.Configuration")
     @patch("neon_utils.hana_utils._get_client_config_path")
     @patch("neon_utils.hana_utils._refresh_token")
     @patch("neon_utils.hana_utils.requests.post")
-    def test_request_backend_ssl_verify(self, mock_post, mock_refresh, config_path):
+    def test_request_backend_ssl_verify(self, mock_post, mock_refresh,
+                                        config_path, config):
+        config.return_value = {}
         config_path.return_value = self.test_path
 
         # Mock successful response
         mock_response = unittest.mock.MagicMock()
         mock_response.ok = True
+        mock_response.status_code = 200
         mock_response.json.return_value = {"lang_code": "en-us", "answer": "test"}
         mock_post.return_value = mock_response
 
-        # Use valid config to skip auth and set expiration far in future
+        # Use valid config to skip auth and set expiration far in future.
+        # Default URL must match the requested server so credentials are not
+        # discarded as a remote switch.
         import neon_utils.hana_utils
-        test_config = valid_config.copy() if valid_config else {
+        neon_utils.hana_utils.set_default_backend_url(self.test_server)
+        test_config = {
             "access_token": "test_token",
             "expiration": time() + 3600
         }
         neon_utils.hana_utils._client_config = test_config
-        neon_utils.hana_utils._headers = valid_headers
+        neon_utils.hana_utils._headers = {
+            "Authorization": "Bearer test_token"
+        }
         from neon_utils.hana_utils import request_backend
 
         # Test default SSL verification (should be True)
@@ -258,6 +296,129 @@ class HanaUtilTests(unittest.TestCase):
                        self.test_server, ssl_verify=False)
         call_kwargs = mock_post.call_args[1]
         self.assertFalse(call_kwargs.get('verify'))
+
+    @patch("neon_utils.hana_utils.sleep")
+    @patch("neon_utils.hana_utils.requests.post")
+    def test_post_with_retries_server_error(self, mock_post, mock_sleep):
+        """Transient server errors retry once by default, honoring num_retries."""
+        from neon_utils.hana_utils import _post_with_retries
+
+        fail = unittest.mock.MagicMock()
+        fail.ok = False
+        fail.status_code = 502
+        fail.text = "<html>502 Bad Gateway</html>"
+        fail.json.side_effect = ValueError("not json")
+
+        ok = unittest.mock.MagicMock()
+        ok.ok = True
+        ok.status_code = 200
+        ok.json.return_value = {"ok": True}
+
+        mock_post.side_effect = [fail, ok]
+        resp = _post_with_retries(url="https://example/test", json={})
+        self.assertTrue(resp.ok)
+        self.assertEqual(mock_post.call_count, 2)
+        mock_sleep.assert_called_once_with(1.0)
+
+        # HANA intermittently returns 500 on otherwise valid requests
+        for code in (500, 503, 504):
+            mock_post.reset_mock()
+            mock_sleep.reset_mock()
+            fail.status_code = code
+            mock_post.side_effect = [fail, ok]
+            resp = _post_with_retries(url="https://example/test", json={})
+            self.assertTrue(resp.ok, f"no retry on {code}")
+            self.assertEqual(mock_post.call_count, 2, f"no retry on {code}")
+
+        # Default behavior is capped at one retry.
+        mock_post.reset_mock()
+        mock_sleep.reset_mock()
+        fail.status_code = 504
+        mock_post.side_effect = [fail, fail]
+        resp = _post_with_retries(url="https://example/test", json={})
+        self.assertFalse(resp.ok)
+        self.assertEqual(resp.status_code, 504)
+        self.assertEqual(mock_post.call_count, 2)
+        mock_sleep.assert_called_once_with(1.0)
+
+        # Callers can explicitly request additional retries.
+        mock_post.reset_mock()
+        mock_sleep.reset_mock()
+        mock_post.side_effect = [fail, fail, fail]
+        resp = _post_with_retries(num_retries=2,
+                                  url="https://example/test", json={})
+        self.assertFalse(resp.ok)
+        self.assertEqual(mock_post.call_count, 3)
+        self.assertEqual(mock_sleep.call_args_list,
+                         [unittest.mock.call(1.0),
+                          unittest.mock.call(2.0)])
+
+    @patch("neon_utils.hana_utils.sleep")
+    @patch("neon_utils.hana_utils.requests.post")
+    def test_post_with_retries_rate_limit(self, mock_post, mock_sleep):
+        """429 is returned immediately even when retries are requested."""
+        from neon_utils.hana_utils import _post_with_retries
+
+        limited = unittest.mock.MagicMock()
+        limited.ok = False
+        limited.status_code = 429
+        limited.text = '{"detail":"Too many auth requests from: 1.2.3.4. Wait 12s."}'
+        limited.json.return_value = {
+            "detail": "Too many auth requests from: 1.2.3.4. Wait 12s."
+        }
+
+        mock_post.return_value = limited
+        resp = _post_with_retries(num_retries=3,
+                                  url="https://example/auth/login", json={})
+        self.assertEqual(resp.status_code, 429)
+        self.assertEqual(mock_post.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    @patch("neon_utils.hana_utils.sleep")
+    @patch("neon_utils.hana_utils.requests.post")
+    def test_post_with_retries_non_transient(self, mock_post, mock_sleep):
+        """Auth failures and other non-transient errors are not retried."""
+        from neon_utils.hana_utils import _post_with_retries
+
+        unauthorized = unittest.mock.MagicMock()
+        unauthorized.ok = False
+        unauthorized.status_code = 401
+        unauthorized.text = '{"detail":"Invalid password"}'
+        mock_post.return_value = unauthorized
+
+        resp = _post_with_retries(url="https://example/auth/login", json={})
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(mock_post.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    @patch("neon_utils.hana_utils._init_client")
+    @patch("neon_utils.hana_utils._post_with_retries")
+    def test_request_backend_num_retries(self, post, init_client):
+        """request_backend forwards the optional retry count."""
+        import neon_utils.hana_utils
+        from neon_utils.hana_utils import request_backend, ServerException
+
+        neon_utils.hana_utils.set_default_backend_url(self.test_server)
+        neon_utils.hana_utils._client_config = {
+            "access_token": "test_token",
+            "expiration": time() + 3600
+        }
+        neon_utils.hana_utils._headers = {
+            "Authorization": "Bearer test_token"
+        }
+        response = unittest.mock.MagicMock()
+        response.ok = False
+        response.status_code = 429
+        response.text = '{"detail":"Too many auth requests"}'
+        response.json.return_value = {"detail": "Too many auth requests"}
+        post.return_value = response
+
+        with self.assertRaisesRegex(ServerException, "Error response 429"):
+            request_backend("/test", {}, self.test_server, num_retries=4)
+
+        init_client.assert_called_once_with(
+            self.test_server, ssl_verify=True, num_retries=4)
+        self.assertEqual(post.call_args.kwargs["num_retries"], 4)
 
 
 if __name__ == '__main__':
