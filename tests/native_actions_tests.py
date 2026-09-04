@@ -46,6 +46,8 @@ from neon_data_models.enum import NodeNativeAction, NativeActionErrorCode
 
 QUICK_TIMEOUTS = {"per_action_timeouts": {"launch_camera_app": 0.2,
                                           "launch_sms_app": 0.2}}
+ACTION_DIALOGS = {"launch_camera_app": ["the camera app"],
+                  "launch_sms_app": ["the messages app"]}
 
 
 def _node_message(action_supported: bool = True, action="launch_camera_app",
@@ -69,6 +71,12 @@ def _response(action="launch_camera_app", status="success", error=None,
     return Message(RESPONSE_TYPE, data, {"session": {"session_id": session_id}})
 
 
+def _renderer(templates: dict) -> MustacheDialogRenderer:
+    renderer = MustacheDialogRenderer()
+    renderer.templates = templates
+    return renderer
+
+
 def _make_skill(settings=None, responses=()):
     """
     Each response is emitted synchronously from inside the invoke emit, so
@@ -78,7 +86,7 @@ def _make_skill(settings=None, responses=()):
     skill = Mock()
     skill.settings = settings or {}
     skill.bus = FakeBus()
-    skill.dialog_renderer = None
+    skill.dialog_renderer = _renderer(dict(ACTION_DIALOGS))
     if responses:
         skill.bus.on(INVOKE_TYPE,
                      lambda _: [skill.bus.emit(r) for r in responses])
@@ -91,10 +99,11 @@ def _capture_invokes(skill) -> list:
     return invokes
 
 
-def _renderer(templates: dict) -> MustacheDialogRenderer:
-    renderer = MustacheDialogRenderer()
-    renderer.templates = templates
-    return renderer
+def _spoken(skill):
+    """(dialog key, data) of the single speak_dialog call."""
+    skill.speak_dialog.assert_called_once()
+    key, data = skill.speak_dialog.call_args[0]
+    return key, data
 
 
 class NativeActionsTests(unittest.TestCase):
@@ -108,7 +117,10 @@ class NativeActionsTests(unittest.TestCase):
 
         self.assertEqual(result.outcome, NativeActionOutcome.NOT_SUPPORTED)
         self.assertEqual(invokes, [])
-        skill.speak.assert_called_once()
+        key, data = _spoken(skill)
+        self.assertEqual(key, "native_action_not_supported")
+        self.assertEqual(data, {"action": "launch_camera_app",
+                                "description": "the camera app"})
 
     def test_capabilities_entirely_absent_treated_as_not_supported(self):
         skill = _make_skill()
@@ -178,9 +190,10 @@ class NativeActionsTests(unittest.TestCase):
                                       NodeNativeAction.LAUNCH_CAMERA_APP)
 
         self.assertEqual(result.outcome, NativeActionOutcome.SUCCESS)
-        skill.speak.assert_called_once()
+        key, _ = _spoken(skill)
+        self.assertEqual(key, "native_action_success")
 
-    def test_error_response_speaks_failure_with_code(self):
+    def test_error_response_speaks_failure_with_code_and_message(self):
         response = _response(status="error",
                              error={"code": "unavailable",
                                     "message": "No camera app."})
@@ -192,7 +205,12 @@ class NativeActionsTests(unittest.TestCase):
 
         self.assertEqual(result.outcome, NativeActionOutcome.ERROR)
         self.assertEqual(result.error_code, NativeActionErrorCode.UNAVAILABLE)
-        skill.speak.assert_called_once()
+        key, data = _spoken(skill)
+        self.assertEqual(key, "native_action_error")
+        self.assertEqual(data, {"action": "launch_camera_app",
+                                "description": "the camera app",
+                                "code": "unavailable",
+                                "message": "No camera app."})
 
     def test_unknown_error_code_maps_to_internal_error(self):
         response = _response(status="error",
@@ -205,6 +223,8 @@ class NativeActionsTests(unittest.TestCase):
 
         self.assertEqual(result.error_code,
                          NativeActionErrorCode.INTERNAL_ERROR)
+        _, data = _spoken(skill)
+        self.assertEqual(data["code"], "internal_error")
 
     # --- response waiting -------------------------------------------------
 
@@ -247,7 +267,8 @@ class NativeActionsTests(unittest.TestCase):
         self.assertEqual(result.outcome, NativeActionOutcome.TIMEOUT)
         self.assertGreaterEqual(elapsed, 0.5)
         self.assertLess(elapsed, 1.5)
-        skill.speak.assert_called_once()
+        key, _ = _spoken(skill)
+        self.assertEqual(key, "native_action_timeout")
 
     def test_wrong_action_then_right_action_back_to_back(self):
         # Both replies land synchronously with no gap; the waiter must keep
@@ -323,117 +344,48 @@ class NativeActionsTests(unittest.TestCase):
 
     # --- dialog -----------------------------------------------------------
 
-    def test_speaks_dialog_key_when_dialog_renderer_has_it(self):
-        response = _response(status="error",
-                             error={"code": "unavailable", "message": "x"})
-        skill = _make_skill(responses=[response])
-        skill.dialog_renderer = _renderer({"native_action_error": ["{code}"]})
-        message = _node_message(action_supported=True)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        skill.speak_dialog.assert_called_once()
-        skill.speak.assert_not_called()
-
-    def test_falls_back_to_speak_when_no_dialog_file(self):
-        response = _response(status="error",
-                             error={"code": "unavailable", "message": "x"})
-        skill = _make_skill(responses=[response])
-        skill.dialog_renderer = _renderer({})
-        message = _node_message(action_supported=True)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        skill.speak.assert_called_once()
-        skill.speak_dialog.assert_not_called()
-
-    def test_no_dialog_file_does_not_log_error_or_warning(self):
-        # A missing native_action_*.dialog file is the expected, common
-        # case, not an exceptional one worth logging.
+    def test_action_dialog_localizes_description(self):
         skill = _make_skill()
+        skill.dialog_renderer = _renderer({"launch_camera_app": ["la cámara"]})
+        message = _node_message(action_supported=False)
+
+        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
+
+        _, data = _spoken(skill)
+        self.assertEqual(data["description"], "la cámara")
+
+    def test_missing_action_dialog_speaks_raw_key(self):
+        # Standard OVOS behavior for a missing dialog file, and the cue a
+        # skill author gets that `launch_camera_app.dialog` is absent.
+        skill = _make_skill()
+        skill.dialog_renderer = _renderer({})
+        message = _node_message(action_supported=False)
+
+        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
+
+        _, data = _spoken(skill)
+        self.assertEqual(data["description"], "launch_camera_app")
+
+    def test_no_dialog_renderer_speaks_raw_key_with_warning(self):
+        skill = _make_skill()
+        skill.dialog_renderer = None
         message = _node_message(action_supported=False)
 
         with patch("neon_utils.native_actions.LOG") as mock_log:
             invoke_native_action(skill, message,
                                  NodeNativeAction.LAUNCH_CAMERA_APP)
 
-        mock_log.error.assert_not_called()
-        mock_log.warning.assert_not_called()
+        _, data = _spoken(skill)
+        self.assertEqual(data["description"], "launch_camera_app")
+        mock_log.warning.assert_called_once()
 
-    def test_action_dialog_localizes_description(self):
-        skill = _make_skill()
-        skill.dialog_renderer = _renderer(
-            {"native_action_not_supported": ["No puedo abrir {description}."],
-             "launch_camera_app": ["la cámara"]})
-        message = _node_message(action_supported=False)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        key, data = skill.speak_dialog.call_args[0]
-        self.assertEqual(key, "native_action_not_supported")
-        self.assertEqual(data["description"], "la cámara")
-
-    def test_description_falls_back_to_english_without_action_dialog(self):
-        skill = _make_skill()
-        skill.dialog_renderer = _renderer(
-            {"native_action_not_supported": ["Cannot open {description}."]})
-        message = _node_message(action_supported=False)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        _, data = skill.speak_dialog.call_args[0]
-        self.assertEqual(data["description"], "the camera app")
-
-    def test_not_supported_fallback_text(self):
+    def test_speaks_with_triggering_message(self):
         skill = _make_skill()
         message = _node_message(action_supported=False)
 
         invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
 
-        self.assertEqual(skill.speak.call_args[0][0],
-                         "This device cannot open the camera app.")
-
-    def test_timeout_fallback_text(self):
-        skill = _make_skill(settings=QUICK_TIMEOUTS)
-        message = _node_message(action_supported=True)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        self.assertEqual(skill.speak.call_args[0][0],
-                         "I did not reach your device.")
-
-    def test_success_fallback_text(self):
-        skill = _make_skill(settings={"confirm_on_success": True},
-                            responses=[_response(status="success")])
-        message = _node_message(action_supported=True)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        self.assertEqual(skill.speak.call_args[0][0], "Done.")
-
-    def test_error_fallback_uses_node_message_when_present(self):
-        response = _response(status="error",
-                             error={"code": "unavailable",
-                                    "message": "No camera app is available."})
-        skill = _make_skill(responses=[response])
-        message = _node_message(action_supported=True)
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_CAMERA_APP)
-
-        self.assertEqual(skill.speak.call_args[0][0],
-                         "No camera app is available.")
-
-    def test_error_fallback_generic_when_node_gives_no_message(self):
-        response = _response(action="launch_sms_app", status="error",
-                             error={"code": "unavailable", "message": ""})
-        skill = _make_skill(responses=[response])
-        message = _node_message(action_supported=True,
-                                action="launch_sms_app")
-
-        invoke_native_action(skill, message, NodeNativeAction.LAUNCH_SMS_APP)
-
-        self.assertEqual(skill.speak.call_args[0][0],
-                         "I could not open the sms app.")
+        self.assertIs(skill.speak_dialog.call_args[1]["message"], message)
 
 
 if __name__ == '__main__':

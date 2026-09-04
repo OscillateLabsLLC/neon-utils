@@ -27,17 +27,36 @@
 # SOFTWARE,  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import time
+"""
+Shared helper for Node native actions (`node.invoke_native`).
+
+A skill that calls `invoke_native_action` must ship these dialog files:
+
+- `native_action_not_supported.dialog`
+- `native_action_success.dialog` (spoken only when `confirm_on_success` is set)
+- `native_action_timeout.dialog`
+- `native_action_error.dialog`
+- one `<NodeNativeAction value>.dialog` per action the skill invokes, e.g.
+  `launch_camera_app.dialog`, holding the spoken name of that action
+
+Every `native_action_*` dialog receives `{action}` and `{description}`;
+`native_action_error` also receives `{code}` and `{message}`. A missing
+dialog file gets the standard OVOS behavior: the key itself is spoken.
+"""
+
 import threading
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from ovos_bus_client import Message
 from ovos_utils.log import LOG
-from ovos_workshop.skills.ovos import OVOSSkill
 
 from neon_data_models.enum import NodeNativeAction, NativeActionErrorCode
+
+if TYPE_CHECKING:
+    from neon_utils.skills.neon_skill import NeonSkill
 
 INVOKE_TYPE = "node.invoke_native"
 RESPONSE_TYPE = "node.invoke_native.response"
@@ -68,14 +87,15 @@ class NativeActionResult:
     error_message: str = ""
 
 
-def invoke_native_action(skill: OVOSSkill, message: Message,
+def invoke_native_action(skill: "NeonSkill", message: Message,
                          action: NodeNativeAction,
                          params: Optional[dict] = None) -> NativeActionResult:
     """
     Capability-gate, dispatch, and await a `node.invoke_native` request.
     Shared by every skill's `if node:` branch so the flow (gate, emit,
     await, settings) lives in one place.
-    :param skill: the calling OVOSSkill/NeonSkill instance
+    :param skill: the calling NeonSkill instance (its `speak_dialog` must
+        accept `message=`, which the OVOSSkill base does not)
     :param message: the triggering Message (must carry `context.node`)
     :param action: `NodeNativeAction` to invoke
     :param params: optional payload (only meaningful for sms/email actions)
@@ -153,7 +173,7 @@ def _session_of(message: Message) -> Optional[str]:
     return message.context.get("session", {}).get("session_id")
 
 
-def _interpret_response(skill: OVOSSkill, message: Message,
+def _interpret_response(skill: "NeonSkill", message: Message,
                         action_value: str,
                         response: Message) -> NativeActionResult:
     if response.data.get("status") == "success":
@@ -172,7 +192,7 @@ def _interpret_response(skill: OVOSSkill, message: Message,
                               error_message)
 
 
-def _resolve_timeout(skill: OVOSSkill, action_value: str) -> float:
+def _resolve_timeout(skill: "NeonSkill", action_value: str) -> float:
     overrides = skill.settings.get("per_action_timeouts") or {}
     if action_value in overrides:
         try:
@@ -183,80 +203,40 @@ def _resolve_timeout(skill: OVOSSkill, action_value: str) -> float:
     return _DEFAULT_TIMEOUTS.get(action_value, _FALLBACK_TIMEOUT)
 
 
-def _speak_not_supported(skill: OVOSSkill, message: Message,
+def _speak_not_supported(skill: "NeonSkill", message: Message,
                          action_value: str):
-    _speak(skill, message, "native_action_not_supported",
-           _dialog_data(skill, action_value))
+    skill.speak_dialog("native_action_not_supported",
+                       _dialog_data(skill, action_value), message=message)
 
 
-def _speak_success(skill: OVOSSkill, message: Message, action_value: str):
-    _speak(skill, message, "native_action_success",
-           _dialog_data(skill, action_value))
+def _speak_success(skill: "NeonSkill", message: Message, action_value: str):
+    skill.speak_dialog("native_action_success",
+                       _dialog_data(skill, action_value), message=message)
 
 
-def _speak_timeout(skill: OVOSSkill, message: Message, action_value: str):
-    _speak(skill, message, "native_action_timeout",
-           _dialog_data(skill, action_value))
+def _speak_timeout(skill: "NeonSkill", message: Message, action_value: str):
+    skill.speak_dialog("native_action_timeout",
+                       _dialog_data(skill, action_value), message=message)
 
 
-def _speak_error(skill: OVOSSkill, message: Message, action_value: str,
+def _speak_error(skill: "NeonSkill", message: Message, action_value: str,
                  error_code: NativeActionErrorCode, error_message: str):
-    _speak(skill, message, "native_action_error",
-           _dialog_data(skill, action_value, code=error_code.value,
-                        message=error_message))
+    skill.speak_dialog("native_action_error",
+                       _dialog_data(skill, action_value,
+                                    code=error_code.value,
+                                    message=error_message),
+                       message=message)
 
 
-def _dialog_data(skill: OVOSSkill, action_value: str, **extra) -> dict:
+def _dialog_data(skill: "NeonSkill", action_value: str, **extra) -> dict:
     return {"action": action_value,
             "description": _describe(skill, action_value), **extra}
 
 
-def _speak(skill: OVOSSkill, message: Message, dialog_key: str, data: dict):
-    """Prefer the skill's own dialog file; fall back to built-in text."""
-    if _has_dialog(skill, dialog_key):
-        skill.speak_dialog(dialog_key, data, message=message)
-    else:
-        skill.speak(_fallback_text(dialog_key, data), message=message)
-
-
-def _has_dialog(skill: OVOSSkill, dialog_key: str) -> bool:
-    """
-    Checks `templates` directly rather than calling `speak_dialog` blind:
-    a missing dialog file is the expected case here, not an error to log.
-    """
-    try:
-        renderer = skill.dialog_renderer
-        return bool(renderer) and dialog_key in renderer.templates
-    except Exception as e:
-        LOG.warning(f"Failed checking dialog_renderer for {dialog_key}: {e}")
-        return False
-
-
-def _describe(skill: OVOSSkill, action_value: str) -> str:
-    """
-    A skill localizes the spoken name of an action with a dialog file named
-    after the `NodeNativeAction` value, e.g. `launch_camera_app.dialog`.
-    """
-    if _has_dialog(skill, action_value):
-        return skill.dialog_renderer.render(action_value)
-    return _fallback_description(action_value)
-
-
-def _fallback_description(action_value: str) -> str:
-    name = action_value.replace("launch_", "").replace("_app", "") \
-        .replace("_", " ")
-    return f"the {name} app" if name else "that app"
-
-
-def _fallback_text(dialog_key: str, data: dict) -> str:
-    """Built-in English for a skill with no matching dialog file."""
-    description = data.get("description") or "that app"
-    if dialog_key == "native_action_not_supported":
-        return f"This device cannot open {description}."
-    if dialog_key == "native_action_success":
-        return "Done."
-    if dialog_key == "native_action_timeout":
-        return "I did not reach your device."
-    if dialog_key == "native_action_error":
-        return data.get("message") or f"I could not open {description}."
-    return ""
+def _describe(skill: "NeonSkill", action_value: str) -> str:
+    """Render `<action_value>.dialog`; the raw key if the file is missing."""
+    renderer = skill.dialog_renderer
+    if not renderer:
+        LOG.warning(f"No dialog_renderer; speaking raw key {action_value}")
+        return action_value
+    return renderer.render(action_value)
