@@ -27,6 +27,7 @@
 # SOFTWARE,  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import time
+import threading
 
 from dataclasses import dataclass
 from enum import Enum
@@ -34,8 +35,12 @@ from typing import Optional
 
 from ovos_bus_client import Message
 from ovos_utils.log import LOG
+from ovos_workshop.skills.ovos import OVOSSkill
 
 from neon_data_models.enum import NodeNativeAction, NativeActionErrorCode
+
+INVOKE_TYPE = "node.invoke_native"
+RESPONSE_TYPE = "node.invoke_native.response"
 
 # Default response timeout in seconds, per action.
 _DEFAULT_TIMEOUTS = {
@@ -46,6 +51,7 @@ _DEFAULT_TIMEOUTS = {
     NodeNativeAction.LAUNCH_SMS_APP.value: 5,
     NodeNativeAction.LAUNCH_EMAIL_APP.value: 5,
 }
+_FALLBACK_TIMEOUT = 5
 
 
 class NativeActionOutcome(Enum):
@@ -62,7 +68,8 @@ class NativeActionResult:
     error_message: str = ""
 
 
-def invoke_native_action(skill, message: Message, action: NodeNativeAction,
+def invoke_native_action(skill: OVOSSkill, message: Message,
+                         action: NodeNativeAction,
                          params: Optional[dict] = None) -> NativeActionResult:
     """
     Capability-gate, dispatch, and await a `node.invoke_native` request.
@@ -85,19 +92,17 @@ def invoke_native_action(skill, message: Message, action: NodeNativeAction,
         _speak_not_supported(skill, message, action_value)
         return NativeActionResult(NativeActionOutcome.NOT_SUPPORTED)
 
-    session_id = message.context.get("session", {}).get("session_id") or \
-        node_ctx.get("node_id")
+    session_id = _session_of(message) or node_ctx.get("node_id")
 
-    invoke_msg = message.reply("node.invoke_native",
+    invoke_msg = message.reply(INVOKE_TYPE,
                                {"action": action_value,
                                 "params": params or {}})
+    waiter = _ResponseWaiter(skill.bus, session_id, action_value)
     skill.bus.emit(invoke_msg)
-
-    timeout = _resolve_timeout(skill, action_value)
-    response = _await_response(skill, session_id, action_value, timeout)
+    response = waiter.wait(_resolve_timeout(skill, action_value))
 
     if response is None:
-        LOG.warning(f"Timed out awaiting node.invoke_native.response for "
+        LOG.warning(f"Timed out awaiting {RESPONSE_TYPE} for "
                     f"action={action_value} session={session_id}")
         _speak_timeout(skill, message, action_value)
         return NativeActionResult(NativeActionOutcome.TIMEOUT)
@@ -105,7 +110,51 @@ def invoke_native_action(skill, message: Message, action: NodeNativeAction,
     return _interpret_response(skill, message, action_value, response)
 
 
-def _interpret_response(skill, message: Message, action_value: str,
+class _ResponseWaiter:
+    """
+    Subscribes before the request is emitted, so a reply that lands before
+    `emit()` returns is still caught. Filters on action and session so
+    concurrent requests on a shared bus cannot take each other's reply.
+    """
+
+    def __init__(self, bus, session_id: Optional[str], action_value: str):
+        self._bus = bus
+        self._session_id = session_id
+        self._action_value = action_value
+        self._received = threading.Event()
+        self._handler = self._on_response
+        self.response: Optional[Message] = None
+        bus.on(RESPONSE_TYPE, self._handler)
+
+    def wait(self, timeout: float) -> Optional[Message]:
+        try:
+            self._received.wait(timeout)
+        finally:
+            self._bus.remove(RESPONSE_TYPE, self._handler)
+        return self.response
+
+    def _on_response(self, response: Message):
+        if not self._matches(response):
+            LOG.debug(f"Ignoring {RESPONSE_TYPE} for "
+                      f"action={response.data.get('action')} "
+                      f"session={_session_of(response)}")
+            return
+        self.response = response
+        self._received.set()
+
+    def _matches(self, response: Message) -> bool:
+        if response.data.get("action") != self._action_value:
+            return False
+        return self._session_id is None or \
+            _session_of(response) == self._session_id
+
+
+def _session_of(message: Message) -> Optional[str]:
+    return message.context.get("session", {}).get("session_id")
+
+
+def _interpret_response(skill: OVOSSkill, message: Message,
+                        action_value: str,
                         response: Message) -> NativeActionResult:
     if response.data.get("status") == "success":
         if skill.settings.get("confirm_on_success", False):
@@ -123,102 +172,91 @@ def _interpret_response(skill, message: Message, action_value: str,
                               error_message)
 
 
-def _resolve_timeout(skill, action_value: str) -> int:
+def _resolve_timeout(skill: OVOSSkill, action_value: str) -> float:
     overrides = skill.settings.get("per_action_timeouts") or {}
     if action_value in overrides:
         try:
-            return int(overrides[action_value])
+            return float(overrides[action_value])
         except (TypeError, ValueError):
             LOG.warning(f"Invalid per_action_timeouts override for "
-                       f"{action_value}: {overrides[action_value]!r}")
-    return _DEFAULT_TIMEOUTS.get(action_value, 5)
+                        f"{action_value}: {overrides[action_value]!r}")
+    return _DEFAULT_TIMEOUTS.get(action_value, _FALLBACK_TIMEOUT)
 
 
-def _await_response(skill, session_id: Optional[str], action_value: str,
-                    timeout: float) -> Optional[Message]:
-    """
-    `wait_for_message` filters only by `msg_type`, not content. Loop with
-    one shared deadline and drop any response for a different session or
-    action.
-    """
-    deadline = time.monotonic() + timeout
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return None
-        response = skill.bus.wait_for_message("node.invoke_native.response",
-                                              timeout=remaining)
-        if response is None:
-            return None
-        resp_action = response.data.get("action")
-        resp_session = response.context.get("session", {}).get("session_id")
-        if resp_action == action_value and (
-                session_id is None or resp_session == session_id):
-            return response
-        LOG.debug(f"Discarding non-matching node.invoke_native.response: "
-                  f"action={resp_action} session={resp_session}")
-
-
-def _speak_not_supported(skill, message: Message, action_value: str):
+def _speak_not_supported(skill: OVOSSkill, message: Message,
+                         action_value: str):
     _speak(skill, message, "native_action_not_supported",
-          {"action": action_value, "description": _describe(action_value)})
+           _dialog_data(skill, action_value))
 
 
-def _speak_success(skill, message: Message, action_value: str):
+def _speak_success(skill: OVOSSkill, message: Message, action_value: str):
     _speak(skill, message, "native_action_success",
-          {"action": action_value, "description": _describe(action_value)})
+           _dialog_data(skill, action_value))
 
 
-def _speak_timeout(skill, message: Message, action_value: str):
+def _speak_timeout(skill: OVOSSkill, message: Message, action_value: str):
     _speak(skill, message, "native_action_timeout",
-          {"action": action_value, "description": _describe(action_value)})
+           _dialog_data(skill, action_value))
 
 
-def _speak_error(skill, message: Message, action_value: str,
+def _speak_error(skill: OVOSSkill, message: Message, action_value: str,
                  error_code: NativeActionErrorCode, error_message: str):
     _speak(skill, message, "native_action_error",
-          {"action": action_value, "code": error_code.value,
-           "message": error_message, "description": _describe(action_value)})
+           _dialog_data(skill, action_value, code=error_code.value,
+                        message=error_message))
 
 
-def _speak(skill, message: Message, dialog_key: str, data: dict):
+def _dialog_data(skill: OVOSSkill, action_value: str, **extra) -> dict:
+    return {"action": action_value,
+            "description": _describe(skill, action_value), **extra}
+
+
+def _speak(skill: OVOSSkill, message: Message, dialog_key: str, data: dict):
+    """Prefer the skill's own dialog file; fall back to built-in text."""
+    if _has_dialog(skill, dialog_key):
+        skill.speak_dialog(dialog_key, data, message=message)
+    else:
+        skill.speak(_fallback_text(dialog_key, data), message=message)
+
+
+def _has_dialog(skill: OVOSSkill, dialog_key: str) -> bool:
     """
-    Speak the skill's own dialog file when it exists, so a skill can still
-    override the default text through the normal OVOS dialog convention.
-    Otherwise speak the canonical fallback text. Checks `templates`
-    directly rather than calling `speak_dialog` blind: a missing dialog
-    file is the expected case here, not an error to log.
+    Checks `templates` directly rather than calling `speak_dialog` blind:
+    a missing dialog file is the expected case here, not an error to log.
     """
     try:
-        if skill.dialog_renderer and \
-                dialog_key in skill.dialog_renderer.templates:
-            skill.speak_dialog(dialog_key, data, message=message)
-            return
+        renderer = skill.dialog_renderer
+        return bool(renderer) and dialog_key in renderer.templates
     except Exception as e:
         LOG.warning(f"Failed checking dialog_renderer for {dialog_key}: {e}")
-    skill.speak(_fallback_text(dialog_key, data), message=message)
+        return False
+
+
+def _describe(skill: OVOSSkill, action_value: str) -> str:
+    """
+    A skill localizes the spoken name of an action with a dialog file named
+    after the `NodeNativeAction` value, e.g. `launch_camera_app.dialog`.
+    """
+    if _has_dialog(skill, action_value):
+        return skill.dialog_renderer.render(action_value)
+    return _fallback_description(action_value)
+
+
+def _fallback_description(action_value: str) -> str:
+    name = action_value.replace("launch_", "").replace("_app", "") \
+        .replace("_", " ")
+    return f"the {name} app" if name else "that app"
 
 
 def _fallback_text(dialog_key: str, data: dict) -> str:
-    """
-    Canonical plain-English text for a skill with no matching dialog file.
-    A skill can still override any of these keys with its own dialog file;
-    this text is the default, not a template for one.
-    """
-    action = data.get("action", "")
+    """Built-in English for a skill with no matching dialog file."""
+    description = data.get("description") or "that app"
     if dialog_key == "native_action_not_supported":
-        return f"This device cannot open {_describe(action)}."
+        return f"This device cannot open {description}."
     if dialog_key == "native_action_success":
         return "Done."
     if dialog_key == "native_action_timeout":
         return "I did not reach your device."
     if dialog_key == "native_action_error":
-        message = data.get("message")
-        return message or f"I could not open {_describe(action)}."
+        return data.get("message") or f"I could not open {description}."
     return ""
-
-
-def _describe(action_value: str) -> str:
-    name = action_value.replace("launch_", "").replace("_app", "") \
-        .replace("_", " ")
-    return f"the {name} app" if name else "that app"
